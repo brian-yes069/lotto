@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>互動式耶誕刮刮卡</title>
+    <style>
+        /* CSS Reset & Basic Layout */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #08110b; /* 極深墨綠色外部背景 */
+            font-family: "Georgia", "Times New Roman", "Microsoft JhengHei", serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 背景裝飾 - 緩慢飄落的雪花 */
+        .snow-bg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image: 
+                radial-gradient(circle at 50% 50%, white 1px, transparent 1px),
+                radial-gradient(circle at 20% 30%, white 1px, transparent 1px);
+            background-size: 120px 120px, 180px 180px;
+            opacity: 0.2;
+            z-index: 0;
+            animation: snowMove 25s linear infinite;
+        }
+
+        @keyframes snowMove {
+            from { background-position: 0 0; }
+            to { background-position: 500px 1000px; }
+        }
+
+        /* Card Container */
+        .card-container {
+            position: relative;
+            width: 350px;
+            height: 560px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.7);
+            border-radius: 24px;
+            overflow: hidden;
+            border: 1px solid rgba(212, 175, 55, 0.4);
+            z-index: 10;
+        }
+
+        /* Music Button */
+        .music-btn {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(212, 175, 55, 0.5);
+            color: #d4af37;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+            font-size: 18px;
+        }
+
+        /* Bottom Layer (Hidden Message) */
+        .secret-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 40px;
+            box-sizing: border-box;
+            background: linear-gradient(135deg, #fdfcf0 0%, #f2ebd3 100%);
+        }
+
+        /* 幾何線條背景裝飾 */
+        .secret-layer::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(rgba(212, 175, 55, 0.05) 1.5px, transparent 1.5px),
+                linear-gradient(90deg, rgba(212, 175, 55, 0.05) 1.5px, transparent 1.5px);
+            background-size: 35px 35px;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* 裝飾框線 */
+        .secret-layer::before {
+            content: '';
+            position: absolute;
+            top: 15px; bottom: 15px; left: 15px; right: 15px;
+            border: 1px double rgba(212, 175, 55, 0.2);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .greeting-text {
+            color: #8e2020; /* 高級深紅 */
+            font-size: 26px;
+            font-weight: 700;
+            line-height: 1.8;
+            opacity: 0;
+            transform: scale(0.6) translateY(20px);
+            transition: all 1.2s cubic-bezier(0.19, 1, 0.22, 1);
+            z-index: 10;
+            white-space: pre-line;
+        }
+
+        .greeting-text.revealed {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            text-shadow: 0 5px 15px rgba(142, 32, 32, 0.1);
+        }
+
+        .sub-text {
+            margin-top: 40px;
+            font-size: 11px;
+            letter-spacing: 5px;
+            color: #c5a97d;
+            text-transform: uppercase;
+            z-index: 10;
+        }
+
+        /* Top Layer (Canvas) */
+        #scratchCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 20;
+            touch-action: none;
+            transition: opacity 1.5s ease-out;
+            cursor: crosshair;
+        }
+
+        #scratchCanvas.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .hint-text {
+            position: absolute;
+            bottom: 35px;
+            width: 100%;
+            text-align: center;
+            color: rgba(212, 175, 55, 0.8);
+            font-size: 13px;
+            letter-spacing: 2px;
+            pointer-events: none;
+            z-index: 30;
+            font-weight: 300;
+        }
+
+        @media (max-width: 400px) {
+            .card-container { width: 92vw; height: 78vh; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="snow-bg"></div>
+
+    <div class="music-btn" id="musicBtn" title="播放/暫停音樂">🔇</div>
+
+    <div class="card-container">
+        <div class="secret-layer">
+            <svg width="120" height="120" viewBox="0 0 100 100" style="position:absolute; top:30px; opacity:0.12; pointer-events:none; z-index: 3;">
+                <circle cx="50" cy="50" r="48" fill="none" stroke="#d4af37" stroke-width="0.3"/>
+                <path d="M50 0 L50 100 M0 50 L100 50" stroke="#d4af37" stroke-width="0.3"/>
+                <rect x="25" y="25" width="50" height="50" fill="none" stroke="#d4af37" stroke-width="0.3" transform="rotate(45 50 50)"/>
+            </svg>
+            <div class="greeting-text" id="greeting"></div>
+            <div class="sub-text">✧ 2025 Merry Christmas ✧</div>
+        </div>
+        <canvas id="scratchCanvas"></canvas>
+    </div>
+
+    <div class="hint-text" id="hintText">摩擦螢幕 刮出聖誕祝福</div>
+
+    <audio id="bgMusic" loop>
+        <source src="we-wish-you-a-merry-christmas-444573.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const canvas = document.getElementById('scratchCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const greetingEl = document.getElementById('greeting');
+        const hintText = document.getElementById('hintText');
+        const musicBtn = document.getElementById('musicBtn');
+        const bgMusic = document.getElementById('bgMusic');
+        let isDrawing = false;
+        let isRevealed = false;
+
+        function initCanvas() {
+            const container = document.querySelector('.card-container');
+            canvas.width = container.offsetWidth;
+            canvas.height = container.offsetHeight;
+            drawCover();
+            ctx.globalCompositeOperation = 'destination-out';
+        }
+
+        const greetings = [
+            "願你的聖誕充滿愛與歡笑！\nMerry Christmas!",
+            "在這個神奇的季節，\n祝你夢想成真！",
+            "聖誕快樂！\n願幸福與你同在。",
+            "願閃亮的星光，\n照亮你未來的每一天！",
+            "Ho Ho Ho!\n聖誕老公公送來了好運給你！",
+            "溫馨的季節，\n送上我最真摯的祝福。",
+            "祝你有個暖心又甜蜜的聖誕節！",
+            "願平安喜樂充滿你的家！",
+            "聖誕鐘聲響起，\n好運隨之而來！",
+            "願你的新年比聖誕燈飾還要璀璨！",
+            "享受這個充滿奇蹟的時刻吧！\n聖誕快樂！",
+            "送你一顆聖誕樹，\n掛滿健康、財富與快樂！",
+            "願愛與和平\n降臨在你心間。",
+            "叮叮噹，叮叮噹，\n快樂響叮噹！",
+            "願光亮指引你，\n走向美好的2025！"
+        ];
+
+        greetingEl.innerText = greetings[Math.floor(Math.random() * greetings.length)];
+
+        function drawCover() {
+            ctx.globalCompositeOperation = 'source-over';
+
+            // 1. 深紅色緞面漸層 - 增加深邃感
+            const bgGrad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.height * 0.9);
+            bgGrad.addColorStop(0, '#a51d1d');
+            bgGrad.addColorStop(0.5, '#7b0f0f');
+            bgGrad.addColorStop(1, '#3b0606');
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. 超高亮極致金色漸層 (24K金箔質感)
+            const cX = canvas.width / 2;
+            const goldGrad = ctx.createLinearGradient(cX - 150, 0, cX + 150, 0);
+            goldGrad.addColorStop(0, '#bf953f'); 
+            goldGrad.addColorStop(0.1, '#fcf6ba'); 
+            goldGrad.addColorStop(0.2, '#ffffff'); // 極亮點
+            goldGrad.addColorStop(0.3, '#fcf6ba'); 
+            goldGrad.addColorStop(0.5, '#b38728'); 
+            goldGrad.addColorStop(0.7, '#f1dca7'); 
+            goldGrad.addColorStop(0.85, '#ffffff'); // 極亮點
+            goldGrad.addColorStop(1, '#aa771c'); 
+
+            // 3. 標題 - Merry Christmas
+            ctx.textAlign = 'center';
+            ctx.fillStyle = goldGrad;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetY = 4;
+            ctx.font = 'italic 38px "Georgia", serif';
+            ctx.fillText("Merry Christmas", cX, 95);
+            
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetY = 0;
+            ctx.font = '300 18px "Microsoft JhengHei", sans-serif';
+            ctx.letterSpacing = "10px";
+            ctx.fillText("耶誕刮刮樂", cX, 140);
+            ctx.letterSpacing = "0px";
+
+            // 4. 金色絲線聖誕樹 - 增加曲線穩定性
+            const treeTop = 180;
+            const treeBottom = 425;
+            ctx.strokeStyle = goldGrad;
+            ctx.lineWidth = 1.4; 
+            ctx.beginPath();
+            for(let i = 0; i < 16; i++) {
+                const y = treeTop + (i * 15.5);
+                const width = i * 8.8;
+                ctx.moveTo(cX - width, y);
+                ctx.quadraticCurveTo(cX, y - 8, cX + width, y);
+            }
+            // 樹幹核心絲線
+            ctx.moveTo(cX, treeTop);
+            ctx.lineTo(cX, treeBottom);
+            ctx.stroke();
+
+            // 樹頂星星 - 增強光效
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 20;
+            drawStar(cX, treeTop - 18, 5, 15, 7, goldGrad);
+            ctx.shadowBlur = 0;
+
+            // 5. 多樣化質感禮物盒 (精細複檢版本)
+            drawEnhancedGift(cX - 120, treeBottom - 18, 55, 55, "fancy_box", goldGrad);
+            drawEnhancedGift(cX + 50, treeBottom - 25, 48, 70, "cylinder", goldGrad);
+            drawEnhancedGift(cX + 5, treeBottom + 12, 45, 38, "slanted_ribbon", goldGrad);
+            drawEnhancedGift(cX - 65, treeBottom + 18, 70, 26, "flat", goldGrad);
+            drawEnhancedGift(cX - 15, treeBottom - 8, 22, 22, "simple", goldGrad);
+        }
+
+        function drawStar(cx, cy, spikes, outerRadius, innerRadius, color) {
+            let rot = Math.PI / 2 * 3;
+            let step = Math.PI / spikes;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - outerRadius);
+            for (let i = 0; i < spikes; i++) {
+                ctx.lineTo(cx + Math.cos(rot) * outerRadius, cy + Math.sin(rot) * outerRadius);
+                rot += step;
+                ctx.lineTo(cx + Math.cos(rot) * innerRadius, cy + Math.sin(rot) * innerRadius);
+                rot += step;
+            }
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        function drawEnhancedGift(x, y, w, h, type, color) {
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.25;
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetY = 2;
+            
+            if (type === "fancy_box") {
+                ctx.strokeRect(x, y, w, h);
+                ctx.beginPath();
+                ctx.moveTo(x + w/2, y); ctx.lineTo(x + w/2, y + h);
+                ctx.moveTo(x, y + h/2); ctx.lineTo(x + w, y + h/2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x + w/2, y);
+                ctx.bezierCurveTo(x + w/2 - 25, y - 22, x + w/2 - 5, y - 28, x + w/2, y - 4);
+                ctx.bezierCurveTo(x + w/2 + 25, y - 22, x + w/2 + 5, y - 28, x + w/2, y - 4);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x + w/2, y - 4); ctx.lineTo(x + w/2 - 12, y + 12);
+                ctx.moveTo(x + w/2, y - 4); ctx.lineTo(x + w/2 + 12, y + 12);
+                ctx.stroke();
+            } else if (type === "cylinder") {
+                ctx.beginPath();
+                ctx.ellipse(x + w/2, y, w/2, 9, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, y); ctx.lineTo(x, y + h);
+                ctx.ellipse(x + w/2, y + h, w/2, 9, 0, 0, Math.PI, false);
+                ctx.moveTo(x + w, y + h); ctx.lineTo(x + w, y);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x + w/2 - 6, y + 9); ctx.lineTo(x + w/2 - 6, y + h + 9);
+                ctx.moveTo(x + w/2 + 6, y + 9); ctx.lineTo(x + w/2 + 6, y + h + 9);
+                ctx.stroke();
+            } else if (type === "slanted_ribbon") {
+                ctx.strokeRect(x, y, w, h);
+                ctx.beginPath();
+                ctx.moveTo(x, y + h/3.5); ctx.lineTo(x + w, y + (h/3.5)*2.2);
+                ctx.moveTo(x + w/3.5, y); ctx.lineTo(x + (w/3.5)*2.2, y + h);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(x + w/2, y, 4.5, 0, Math.PI * 2);
+                ctx.stroke();
+            } else if (type === "flat" || type === "simple") {
+                ctx.strokeRect(x, y, w, h);
+                ctx.beginPath();
+                ctx.moveTo(x + w/2, y); ctx.lineTo(x + w/2, y + h);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x + w/2, y);
+                ctx.lineTo(x + w/2 - 6, y - 6);
+                ctx.moveTo(x + w/2, y);
+                ctx.lineTo(x + w/2 + 6, y - 6);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function getMousePos(canvas, evt) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+            const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function scratch(e) {
+            if (!isDrawing || isRevealed) return;
+            e.preventDefault();
+            const pos = getMousePos(canvas, e);
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 30, 0, Math.PI * 2);
+            ctx.fill();
+            checkPercentage();
+        }
+
+        function checkPercentage() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imageData.data;
+            let transparent = 0;
+            const step = 25; 
+            let totalChecked = 0;
+            for (let i = 3; i < pixels.length; i += (step * 4)) {
+                totalChecked++;
+                if (pixels[i] === 0) transparent++;
+            }
+            const ratio = transparent / totalChecked;
+            if (ratio > 0.42) revealAll();
+        }
+
+        function revealAll() {
+            if (isRevealed) return;
+            isRevealed = true;
+            canvas.classList.add('fade-out');
+            hintText.style.opacity = '0';
+            setTimeout(() => {
+                greetingEl.classList.add('revealed');
+            }, 300);
+        }
+
+        canvas.addEventListener('mousedown', (e) => { isDrawing = true; scratch(e); });
+        canvas.addEventListener('mousemove', scratch);
+        window.addEventListener('mouseup', () => { isDrawing = false; });
+        canvas.addEventListener('touchstart', (e) => { isDrawing = true; scratch(e); }, {passive: false});
+        canvas.addEventListener('touchmove', scratch, {passive: false});
+        window.addEventListener('touchend', () => { isDrawing = false; });
+
+        let isPlaying = false;
+        musicBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                bgMusic.pause();
+                musicBtn.innerText = "🔇";
+            } else {
+                bgMusic.play().catch(err => console.log("Music play blocked"));
+                musicBtn.innerText = "🎵";
+            }
+            isPlaying = !isPlaying;
+        });
+
+        window.addEventListener('resize', () => {
+            if(!isRevealed) initCanvas();
+        });
+
+        window.onload = initCanvas;
+    </script>
+</body>
+</html>
